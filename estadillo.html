@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estadillo Centros Públicos - Gestión</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Librería para generar Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        corporate: {
+                            blue: '#014380',
+                            light: '#96a5c6',
+                            green: '#005429'
+                        }
+                    },
+                    fontSize: {
+                        'xxs': '0.65rem',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Estilos para la tabla matricial */
+        .matrix-table input {
+            text-align: center;
+            width: 100%;
+            background: transparent;
+            outline: none;
+            font-size: 0.85rem;
+        }
+
+        .matrix-table input:focus {
+            background: #eeffff;
+            font-weight: bold;
+        }
+
+        .matrix-table th,
+        .matrix-table td {
+            border: 1px solid #e5e7eb;
+            padding: 4px;
+        }
+
+        /* Scrollbars personalizados */
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background: #014380;
+            border-radius: 4px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .tab-content {
+                display: block !important;
+                page-break-before: always;
+            }
+
+            .tab-content.active {
+                page-break-before: auto;
+            }
+
+            .card {
+                border: none;
+                shadow: none;
+            }
+
+            .matrix-container {
+                overflow: visible !important;
+            }
+
+            input,
+            select,
+            textarea {
+                border: none !important;
+                resize: none;
+            }
+
+            @page {
+                size: landscape;
+                margin: 0.5cm;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen pb-20">
+
+    <!-- Encabezado Principal -->
+    <header class="bg-corporate-blue text-white shadow-lg sticky top-0 z-50 no-print">
+        <div class="max-w-[95%] mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <i data-lucide="school" class="w-8 h-8 text-corporate-light"></i>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">Gestión Estadillo</h1>
+                    <p class="text-xs text-corporate-light opacity-90">Delegación Episcopal de Enseñanza</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+
+                <!-- BOTÓN PRINCIPAL: ENVIAR A DRIVE -->
+                <button onclick="guardarEnNube()" id="btn-cloud"
+                    class="flex items-center gap-2 bg-green-600 hover:bg-green-700 px-6 py-2 rounded-lg text-sm font-bold transition-colors shadow-md border border-transparent hover:border-green-400 text-white">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span>Enviar</span>
+                </button>
+
+                <!-- BOTÓN SECUNDARIO: EXPORTAR EXCEL -->
+                <button onclick="descargarExcelLocal()"
+                    class="flex items-center gap-2 bg-white text-corporate-blue hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-md border border-transparent hover:border-gray-300">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    Exportar
+                </button>
+
+                <!-- BOTÓN NUEVO: LIMPIAR -->
+                <button onclick="limpiarFormulario()"
+                    class="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-md border border-transparent hover:border-red-400 ml-2"
+                    title="Borrar todos los datos">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-[95%] mx-auto px-2 py-6">
+
+        <!-- Navegación Separada por Etapas -->
+        <nav class="flex flex-wrap gap-2 mb-6 no-print bg-white p-2 rounded-xl shadow-sm border border-gray-200">
+            <button onclick="switchTab('datos')" id="btn-datos"
+                class="tab-btn active bg-corporate-blue text-white flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="file-text" class="w-4 h-4"></i> Datos Generales
+            </button>
+
+            <div class="h-8 w-px bg-gray-300 mx-1"></div> <!-- Separador -->
+
+            <button onclick="switchTab('infantil')" id="btn-infantil"
+                class="tab-btn text-gray-600 hover:bg-gray-100 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="baby" class="w-4 h-4"></i> Infantil
+            </button>
+            <button onclick="switchTab('primaria')" id="btn-primaria"
+                class="tab-btn text-gray-600 hover:bg-gray-100 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="book-open" class="w-4 h-4"></i> Primaria
+            </button>
+            <button onclick="switchTab('eso')" id="btn-eso"
+                class="tab-btn text-gray-600 hover:bg-gray-100 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="graduation-cap" class="w-4 h-4"></i> ESO
+            </button>
+            <button onclick="switchTab('bach')" id="btn-bach"
+                class="tab-btn text-gray-600 hover:bg-gray-100 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="library" class="w-4 h-4"></i> Bachillerato
+            </button>
+
+            <div class="h-8 w-px bg-gray-300 mx-1"></div> <!-- Separador -->
+
+            <button onclick="switchTab('profesorado')" id="btn-profesorado"
+                class="tab-btn text-gray-600 hover:bg-gray-100 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="users" class="w-4 h-4"></i> Profesorado
+            </button>
+            <button onclick="switchTab('resumen')" id="btn-resumen"
+                class="tab-btn text-gray-600 hover:bg-gray-100 flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm">
+                <i data-lucide="clipboard-list" class="w-4 h-4"></i> Resumen
+            </button>
+        </nav>
+
+        <!-- SECCIÓN 1: DATOS GENERALES -->
+        <div id="tab-datos" class="tab-content active space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-corporate-blue mb-4 border-b pb-2">Identificación del Centro</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-corporate-blue uppercase">Código Oficial (*)</label>
+                        <input type="text" id="codigo-oficial" class="w-full p-2 border rounded bg-gray-50 uppercase"
+                            onchange="guardarDatos()">
+                    </div>
+                    <div class="md:col-span-2 space-y-1">
+                        <label class="text-xs font-bold text-corporate-blue uppercase">Nombre del Centro</label>
+                        <input type="text" id="nombre-centro" class="w-full p-2 border rounded"
+                            onchange="guardarDatos()">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Vicaría</label>
+                        <select id="vicaria" class="w-full p-2 border rounded" onchange="guardarDatos()">
+                            <option value="">- Seleccionar -</option>
+                            <option>I</option>
+                            <option>II</option>
+                            <option>III</option>
+                            <option>IV</option>
+                            <option>V</option>
+                            <option>VI</option>
+                            <option>VII</option>
+                            <option>VIII</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Tipo de Centro</label>
+                        <input type="text" id="tipo-centro" class="w-full p-2 border rounded" onchange="guardarDatos()">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-bold text-gray-500 uppercase">Curso</label>
+                        <!-- Valor vacío por defecto -->
+                        <input type="text" id="curso" class="w-full p-2 border rounded" value=""
+                            placeholder="Ej: 2024-2025" onchange="guardarDatos()">
+                    </div>
+                </div>
+            </div>
+            <!-- Datos de Contacto -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-bold text-corporate-blue mb-4 border-b pb-2">Ubicación y Contacto</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2"><label class="text-xs font-bold text-gray-500">Dirección</label><input
+                            id="direccion" class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">CP</label><input id="cp"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Municipio</label><input id="municipio"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Teléfono</label><input id="telefono"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Email</label><input id="email"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Director/a</label><input id="director"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Inspector/a</label><input id="inspector"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+                    <div><label class="text-xs font-bold text-gray-500">Fecha</label><input type="date" id="fecha"
+                            class="w-full p-2 border rounded" onchange="guardarDatos()"></div>
+
+                    <div class="md:col-span-3 bg-gray-50 p-3 rounded border border-gray-200">
+                        <label class="text-xs font-bold text-corporate-blue uppercase block mb-2">Otras Religiones en el
+                            Centro (Marcar X)</label>
+                        <div class="flex gap-6">
+                            <label
+                                class="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded transition-colors">
+                                <input type="checkbox" id="check-islamica"
+                                    class="w-5 h-5 text-corporate-blue rounded border-gray-300 focus:ring-corporate-blue"
+                                    onchange="guardarDatos()">
+                                <span class="text-sm font-medium text-gray-700">Religión Islámica</span>
+                            </label>
+                            <label
+                                class="flex items-center gap-2 cursor-pointer hover:bg-white p-2 rounded transition-colors">
+                                <input type="checkbox" id="check-evangelica"
+                                    class="w-5 h-5 text-corporate-blue rounded border-gray-300 focus:ring-corporate-blue"
+                                    onchange="guardarDatos()">
+                                <span class="text-sm font-medium text-gray-700">Religión Evangélica</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-3"><label class="text-xs font-bold text-gray-500">Docentes (Resumen
+                            Portada)</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input id="docente-1" class="w-full p-2 border rounded" placeholder="Docente 1"
+                                onchange="guardarDatos()">
+                            <input id="docente-2" class="w-full p-2 border rounded" placeholder="Docente 2"
+                                onchange="guardarDatos()">
+                            <input id="docente-3" class="w-full p-2 border rounded" placeholder="Docente 3"
+                                onchange="guardarDatos()">
+                            <input id="docente-4" class="w-full p-2 border rounded" placeholder="Docente 4"
+                                onchange="guardarDatos()">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIONES MATRICIALES -->
+        <div id="tab-infantil" class="tab-content space-y-8">
+            <div id="matrix-infantil"></div>
+        </div>
+        <div id="tab-primaria" class="tab-content space-y-8">
+            <div id="matrix-primaria"></div>
+        </div>
+        <div id="tab-eso" class="tab-content space-y-8">
+            <div id="matrix-eso"></div>
+        </div>
+        <div id="tab-bach" class="tab-content space-y-8">
+            <div id="matrix-bach"></div>
+        </div>
+
+        <!-- SECCIÓN 6: PROFESORADO -->
+        <div id="tab-profesorado" class="tab-content">
+            <div class="bg-white rounded-xl shadow-sm p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-bold text-corporate-blue">Equipo Docente</h2>
+                    <button onclick="addProfesor()"
+                        class="text-sm bg-corporate-blue text-white px-3 py-2 rounded hover:bg-blue-800 transition">+
+                        Añadir Docente</button>
+                </div>
+                <div id="lista-profesores" class="space-y-4"></div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 7: RESUMEN (Dashboard) -->
+        <div id="tab-resumen" class="tab-content space-y-6">
+            <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3 mb-4">
+                <i data-lucide="info" class="text-corporate-blue mt-1"></i>
+                <div>
+                    <h3 class="font-bold text-corporate-blue text-sm">Verificación de Datos</h3>
+                    <p class="text-xs text-gray-600">Estos totales se calculan automáticamente según los datos
+                        introducidos en las pestañas correspondientes.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Cards se rellenan dinámicamente -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border-t-4 border-corporate-blue">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm uppercase flex items-center gap-2"><i
+                            data-lucide="baby" class="w-4 h-4"></i> Infantil</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Matrícula Total</span><span id="res-infantil-alum"
+                                class="font-bold text-lg text-gray-800">0</span></div>
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Alumnos Religión</span><span id="res-infantil-reli"
+                                class="font-bold text-lg text-corporate-green">0</span></div>
+                        <div class="flex justify-between items-end"><span
+                                class="text-gray-500 text-xs">Porcentaje</span><span id="res-infantil-pct"
+                                class="font-bold text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded">0%</span></div>
+                        <div class="bg-gray-50 p-2 rounded flex justify-between items-center mt-2"><span
+                                class="text-xs font-bold text-gray-500">Horas</span><span id="res-infantil-horas"
+                                class="font-bold text-yellow-600">0,00</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border-t-4 border-corporate-blue">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm uppercase flex items-center gap-2"><i
+                            data-lucide="book-open" class="w-4 h-4"></i> Primaria</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Matrícula Total</span><span id="res-primaria-alum"
+                                class="font-bold text-lg text-gray-800">0</span></div>
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Alumnos Religión</span><span id="res-primaria-reli"
+                                class="font-bold text-lg text-corporate-green">0</span></div>
+                        <div class="flex justify-between items-end"><span
+                                class="text-gray-500 text-xs">Porcentaje</span><span id="res-primaria-pct"
+                                class="font-bold text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded">0%</span></div>
+                        <div class="bg-gray-50 p-2 rounded flex justify-between items-center mt-2"><span
+                                class="text-xs font-bold text-gray-500">Horas</span><span id="res-primaria-horas"
+                                class="font-bold text-yellow-600">0,00</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border-t-4 border-corporate-light">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm uppercase flex items-center gap-2"><i
+                            data-lucide="graduation-cap" class="w-4 h-4"></i> ESO</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Matrícula Total</span><span id="res-eso-alum"
+                                class="font-bold text-lg text-gray-800">0</span></div>
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Alumnos Religión</span><span id="res-eso-reli"
+                                class="font-bold text-lg text-corporate-green">0</span></div>
+                        <div class="flex justify-between items-end"><span
+                                class="text-gray-500 text-xs">Porcentaje</span><span id="res-eso-pct"
+                                class="font-bold text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded">0%</span></div>
+                        <div class="bg-gray-50 p-2 rounded flex justify-between items-center mt-2"><span
+                                class="text-xs font-bold text-gray-500">Horas</span><span id="res-eso-horas"
+                                class="font-bold text-yellow-600">0,00</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border-t-4 border-corporate-light">
+                    <h3 class="font-bold text-gray-700 mb-4 text-sm uppercase flex items-center gap-2"><i
+                            data-lucide="library" class="w-4 h-4"></i> Bachillerato</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Matrícula Total</span><span id="res-bach-alum"
+                                class="font-bold text-lg text-gray-800">0</span></div>
+                        <div class="flex justify-between items-end border-b border-dashed pb-2"><span
+                                class="text-gray-500 text-xs">Alumnos Religión</span><span id="res-bach-reli"
+                                class="font-bold text-lg text-corporate-green">0</span></div>
+                        <div class="flex justify-between items-end"><span
+                                class="text-gray-500 text-xs">Porcentaje</span><span id="res-bach-pct"
+                                class="font-bold text-sm bg-blue-100 text-blue-800 px-2 py-0.5 rounded">0%</span></div>
+                        <div class="bg-gray-50 p-2 rounded flex justify-between items-center mt-2"><span
+                                class="text-xs font-bold text-gray-500">Horas</span><span id="res-bach-horas"
+                                class="font-bold text-yellow-600">0,00</span></div>
+                    </div>
+                </div>
+
+                <!-- Tarjeta Global -->
+                <div
+                    class="bg-corporate-blue text-white p-5 rounded-xl shadow-lg flex flex-col justify-center md:col-span-2 lg:col-span-4 mt-4">
+                    <h3 class="font-bold mb-4 text-sm uppercase opacity-90 border-b border-white/20 pb-2">Totales
+                        Globales del Centro</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div><span class="text-xs opacity-70 block">Total Alumnos</span><span id="res-total-alum"
+                                class="font-bold text-2xl">0</span></div>
+                        <div><span class="text-xs opacity-70 block">Total Religión</span><span id="res-total-reli"
+                                class="font-bold text-2xl text-green-300">0</span></div>
+                        <div><span class="text-xs opacity-70 block">Total Horas</span><span id="res-total-horas"
+                                class="font-bold text-2xl text-yellow-300">0,00</span></div>
+                        <div><span class="text-xs opacity-70 block">% Global</span><span id="res-total-pct"
+                                class="text-xl font-bold bg-white/20 px-3 py-1 rounded-full inline-block mt-1">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+                <h2 class="text-lg font-bold text-corporate-blue mb-2">Observaciones Finales</h2>
+                <p class="text-xs text-gray-500 mb-2">Escriba aquí cualquier incidencia o comentario relevante.</p>
+                <textarea id="obs-generales"
+                    class="w-full p-3 border border-gray-300 rounded-lg h-24 outline-none focus:ring-2 focus:ring-corporate-blue text-sm"
+                    onchange="guardarDatos()"></textarea>
+            </div>
+        </div>
+    </main>
+
+    <!-- Script Lógica Completa -->
+    <script>
+        // ==========================================================
+        // CONFIGURACIÓN DE APPS SCRIPT
+        // ==========================================================
+        // URL ACTUALIZADA
+        const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzlwPux7Q1IfSPOI6wdY92s8LBh40XOUcETIsqkU6-iYKq0UlgEY5l8oVuI6KV4AwCe/exec";
+        // ==========================================================
+
+        const GRUPOS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+        const STAGES = {
+            infantil: { title: "Educación Infantil", levels: ["3 años", "4 años", "5 años", "EEI"] },
+            primaria: { title: "Educación Primaria", levels: ["1º", "2º", "3º", "4º", "5º", "6º", "EBO1"] },
+            eso: { title: "E.S.O.", levels: ["1º", "2º", "3º", "4º", "Div.1", "Div.2", "EBO2"] },
+            bach: { title: "Bachillerato", levels: ["1º", "2º"] }
+        };
+
+        let globalStats = {
+            infantil: { total: 0, reli: 0, hours: 0 },
+            primaria: { total: 0, reli: 0, hours: 0 },
+            eso: { total: 0, reli: 0, hours: 0 },
+            bach: { total: 0, reli: 0, hours: 0 }
+        };
+
+        // Generador de Tablas Matrices
+        function renderMatrix(containerId, stageKey) {
+            const config = STAGES[stageKey];
+            const container = document.getElementById(containerId);
+
+            let html = `
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+                <div class="bg-corporate-blue text-white px-4 py-2 font-bold flex justify-between">
+                    <span>${config.title}</span>
+                    <span class="text-xs font-normal opacity-80 bg-white/20 px-2 rounded">Rellene grupos A-J</span>
+                </div>
+                <div class="overflow-x-auto matrix-container">
+                    <table class="w-full text-xs border-collapse matrix-table min-w-[1200px]">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" class="bg-gray-100 w-20 sticky left-0 z-10">Nivel</th>
+                                <th colspan="10" class="bg-blue-50 text-corporate-blue">TOTAL ALUMNOS (Por Grupo)</th>
+                                <th colspan="10" class="bg-green-50 text-corporate-green">ALUMNOS RELIGIÓN (Por Grupo)</th>
+                                <th colspan="2" class="bg-gray-100 text-gray-600 w-40">AGRUPAMIENTOS</th>
+                                <th rowspan="2" class="bg-yellow-50 text-yellow-700 w-16">Horas</th>
+                                <th rowspan="2" class="bg-corporate-blue text-white w-12">%</th>
+                            </tr>
+                            <tr>
+                                ${GRUPOS.map(g => `<th class="w-10 bg-blue-50 text-corporate-blue text-center">${g}</th>`).join('')}
+                                ${GRUPOS.map(g => `<th class="w-10 bg-green-50 text-corporate-green text-center">${g}</th>`).join('')}
+                                <th class="w-24 bg-gray-50">Tipo (A+B)</th>
+                                <th class="w-10 bg-gray-50">Uds</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+
+            config.levels.forEach((level, idx) => {
+                const baseId = `${stageKey}-${idx}`;
+                html += `<tr class="hover:bg-gray-50 group">
+                    <td class="font-bold bg-gray-50 sticky left-0 group-hover:bg-gray-100">${level}</td>`;
+
+                GRUPOS.forEach(g => { html += `<td><input type="number" id="${baseId}-T-${g}" min="0" placeholder="-" onchange="guardarDatos()"></td>`; });
+                GRUPOS.forEach(g => { html += `<td><input type="number" id="${baseId}-R-${g}" min="0" placeholder="-" class="text-corporate-green font-medium" onchange="guardarDatos()"></td>`; });
+
+                html += `<td><input type="text" id="${baseId}-agrup" placeholder="A+B" onchange="guardarDatos()"></td>`;
+                html += `<td><input type="number" id="${baseId}-uds" min="0" class="font-bold text-gray-700" onchange="guardarDatos()"></td>`;
+                html += `<td><input type="text" id="${baseId}-horas" class="font-bold text-yellow-700 bg-yellow-50" onchange="guardarDatos()"></td>`;
+                html += `<td class="text-center font-bold text-gray-500 bg-gray-100" id="${baseId}-percent">0%</td>`;
+                html += `</tr>`;
+            });
+
+            // Fila de Totales
+            html += `<tr class="bg-gray-100 font-bold text-xs">
+                <td class="sticky left-0 bg-gray-100">TOTAL</td>
+                <td colspan="10" class="text-center text-corporate-blue" id="${stageKey}-sum-total">0</td>
+                <td colspan="10" class="text-center text-corporate-green" id="${stageKey}-sum-reli">0</td>
+                <td class="text-right pr-2">Total Uds:</td>
+                <td class="text-center" id="${stageKey}-sum-uds">0</td>
+                <td class="text-center text-yellow-700 bg-yellow-100" id="${stageKey}-sum-horas">0</td>
+                <td class="text-center bg-gray-200" id="${stageKey}-sum-percent">0%</td>
+            </tr></tbody></table></div></div>`;
+            container.innerHTML = html;
+        }
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            renderMatrix('matrix-infantil', 'infantil');
+            renderMatrix('matrix-primaria', 'primaria');
+            renderMatrix('matrix-eso', 'eso');
+            renderMatrix('matrix-bach', 'bach');
+            lucide.createIcons();
+            cargarDatos();
+        });
+
+        // Navegación
+        function switchTab(id) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => {
+                el.classList.remove('bg-corporate-blue', 'text-white');
+                el.classList.add('text-gray-600', 'hover:bg-gray-100');
+            });
+            document.getElementById('tab-' + id).classList.add('active');
+            const btn = document.getElementById('btn-' + id);
+            btn.classList.remove('text-gray-600', 'hover:bg-gray-100');
+            btn.classList.add('bg-corporate-blue', 'text-white');
+
+            if (id === 'resumen') updateResumenView();
+        }
+
+        function updateResumenView() {
+            let gTotal = 0, gReli = 0, gHoras = 0;
+
+            const stages = ['infantil', 'primaria', 'eso', 'bach'];
+            stages.forEach(s => {
+                const data = globalStats[s];
+                document.getElementById(`res-${s}-alum`).innerText = data.total;
+                document.getElementById(`res-${s}-reli`).innerText = data.reli;
+                document.getElementById(`res-${s}-pct`).innerText = data.total > 0 ? Math.round((data.reli / data.total) * 100) + '%' : '0%';
+                document.getElementById(`res-${s}-horas`).innerText = data.hours.toFixed(2).replace('.', ',');
+
+                gTotal += data.total;
+                gReli += data.reli;
+                gHoras += data.hours;
+            });
+
+            document.getElementById('res-total-alum').innerText = gTotal;
+            document.getElementById('res-total-reli').innerText = gReli;
+            document.getElementById('res-total-horas').innerText = gHoras.toFixed(2).replace('.', ',');
+            document.getElementById('res-total-pct').innerText = gTotal > 0 ? Math.round((gReli / gTotal) * 100) + '%' : '0%';
+        }
+
+        function guardarDatos(notify = false) {
+            const data = {};
+            document.querySelectorAll('input, select, textarea').forEach(el => {
+                if (el.id) {
+                    if (el.type === 'checkbox') data[el.id] = el.checked;
+                    else data[el.id] = el.value;
+                }
+            });
+            const profesores = [];
+            document.querySelectorAll('#lista-profesores .grid').forEach((row) => {
+                const inputs = row.querySelectorAll('input');
+                if (inputs.length > 0) {
+                    profesores.push({
+                        nombre: inputs[0].value, apellidos: inputs[1].value, dni: inputs[2].value, niveles: inputs[3].value
+                    });
+                }
+            });
+            data['profesores_data'] = JSON.stringify(profesores);
+
+            localStorage.setItem('estadillo_matrix_v1', JSON.stringify(data));
+            calcularTotalesGlobales();
+        }
+
+        function cargarDatos() {
+            const raw = localStorage.getItem('estadillo_matrix_v1');
+            if (!raw) { addProfesor(); return; }
+            const data = JSON.parse(raw);
+
+            Object.keys(data).forEach(k => {
+                const el = document.getElementById(k);
+                if (el) {
+                    if (el.type === 'checkbox') el.checked = data[k];
+                    else el.value = data[k];
+                }
+            });
+
+            const container = document.getElementById('lista-profesores');
+            container.innerHTML = '';
+            if (data['profesores_data']) {
+                try {
+                    const profesores = JSON.parse(data['profesores_data']);
+                    if (profesores.length > 0) profesores.forEach(p => addProfesor(p));
+                    else addProfesor();
+                } catch (e) { addProfesor(); }
+            } else addProfesor();
+
+            calcularTotalesGlobales();
+        }
+
+        // --- FUNCIÓN LIMPIAR ---
+        function limpiarFormulario() {
+            if (!confirm("⚠️ ¿Estás seguro de que quieres borrar TODOS los datos?\n\nEsta acción no se puede deshacer.")) return;
+
+            localStorage.removeItem('estadillo_matrix_v1');
+
+            document.querySelectorAll('input, select, textarea').forEach(el => {
+                if (el.type === 'checkbox') el.checked = false;
+                else el.value = "";
+            });
+
+            document.getElementById('lista-profesores').innerHTML = '';
+            addProfesor();
+
+            calcularTotalesGlobales();
+            alert("Formulario limpiado correctamente.");
+        }
+
+        function getVal(id) {
+            const el = document.getElementById(id);
+            if (!el) return 0;
+            return parseFloat(el.value.replace(',', '.')) || 0;
+        }
+
+        function calcularTotalesGlobales() {
+            const stages = ['infantil', 'primaria', 'eso', 'bach'];
+
+            stages.forEach(key => {
+                let sumTotal = 0, sumReli = 0, sumUds = 0, sumHoras = 0;
+
+                const config = STAGES[key];
+                config.levels.forEach((_, idx) => {
+                    const baseId = `${key}-${idx}`;
+                    let rowTotal = 0, rowReli = 0;
+
+                    GRUPOS.forEach(g => {
+                        rowTotal += getVal(`${baseId}-T-${g}`);
+                        rowReli += getVal(`${baseId}-R-${g}`);
+                    });
+
+                    sumTotal += rowTotal;
+                    sumReli += rowReli;
+                    sumUds += getVal(`${baseId}-uds`);
+                    sumHoras += getVal(`${baseId}-horas`);
+
+                    const pct = rowTotal > 0 ? ((rowReli / rowTotal) * 100).toFixed(0) : 0;
+                    const pctEl = document.getElementById(`${baseId}-percent`);
+                    if (pctEl) pctEl.innerText = `${pct}%`;
+                });
+
+                document.getElementById(`${key}-sum-total`).textContent = sumTotal;
+                document.getElementById(`${key}-sum-reli`).textContent = sumReli;
+                document.getElementById(`${key}-sum-uds`).textContent = sumUds;
+                document.getElementById(`${key}-sum-horas`).textContent = sumHoras.toFixed(2).replace('.', ',');
+
+                const stgPct = sumTotal > 0 ? ((sumReli / sumTotal) * 100).toFixed(1) : 0;
+                document.getElementById(`${key}-sum-percent`).textContent = `${stgPct}%`;
+
+                globalStats[key] = {
+                    total: sumTotal,
+                    reli: sumReli,
+                    hours: sumHoras
+                };
+            });
+
+            if (document.getElementById('tab-resumen').classList.contains('active')) {
+                updateResumenView();
+            }
+        }
+
+        function addProfesor(data = { nombre: '', apellidos: '', dni: '', niveles: '' }) {
+            const container = document.getElementById('lista-profesores');
+            container.insertAdjacentHTML('beforeend', `
+                <div class="border p-4 rounded bg-gray-50 relative group">
+                    <button onclick="this.parentElement.remove(); guardarDatos()" class="absolute top-2 right-2 text-red-500 hover:bg-red-100 rounded p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input class="p-2 border rounded" placeholder="Nombre" value="${data.nombre}" onchange="guardarDatos()">
+                        <input class="p-2 border rounded" placeholder="Apellidos" value="${data.apellidos}" onchange="guardarDatos()">
+                        <input class="p-2 border rounded" placeholder="DNI/DEI" value="${data.dni}" onchange="guardarDatos()">
+                        <input class="p-2 border rounded md:col-span-3" placeholder="Niveles que imparte" value="${data.niveles}" onchange="guardarDatos()">
+                    </div>
+                </div>
+            `);
+            lucide.createIcons();
+        }
+
+        // ==========================================================
+        // LÓGICA DE EXPORTACIÓN Y DRIVE
+        // ==========================================================
+
+        function generarWorkbook() {
+            const wb = XLSX.utils.book_new();
+            const nombreCentro = document.getElementById('nombre-centro').value || 'Centro';
+            const codigo = document.getElementById('codigo-oficial').value || 'SinCodigo';
+
+            const datosGenerales = [
+                ["DATOS DEL CENTRO"],
+                ["Código Oficial", document.getElementById('codigo-oficial').value],
+                ["Nombre", document.getElementById('nombre-centro').value],
+                ["Vicaría", document.getElementById('vicaria').value],
+                ["Tipo", document.getElementById('tipo-centro').value],
+                ["Curso", document.getElementById('curso').value],
+                ["Dirección", document.getElementById('direccion').value],
+                ["Municipio", document.getElementById('municipio').value],
+                ["Email", document.getElementById('email').value],
+                ["Director/a", document.getElementById('director').value],
+                ["Inspector/a", document.getElementById('inspector').value],
+                ["Otras Religiones"],
+                ["Religión Islámica", document.getElementById('check-islamica').checked ? "SÍ" : "NO"],
+                ["Religión Evangélica", document.getElementById('check-evangelica').checked ? "SÍ" : "NO"],
+                ["Docentes Resumen", document.getElementById('docente-1').value, document.getElementById('docente-2').value, document.getElementById('docente-3').value, document.getElementById('docente-4').value]
+            ];
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(datosGenerales), "Datos Generales");
+
+            function extraerMatriz(stageKey) {
+                const data = [["Nivel", "Total Alumnos", "Alumnos Religión", "Unidades", "Horas"]];
+                const config = STAGES[stageKey];
+                config.levels.forEach((lvl, idx) => {
+                    const baseId = `${stageKey}-${idx}`;
+                    let rowTotal = 0, rowReli = 0;
+                    GRUPOS.forEach(g => {
+                        rowTotal += getVal(`${baseId}-T-${g}`);
+                        rowReli += getVal(`${baseId}-R-${g}`);
+                    });
+                    const uds = getVal(`${baseId}-uds`);
+                    const horas = getVal(`${baseId}-horas`);
+                    data.push([lvl, rowTotal, rowReli, uds, horas]);
+                });
+                return data;
+            }
+
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["EDUCACIÓN INFANTIL"]].concat(extraerMatriz('infantil'))), "Infantil");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["EDUCACIÓN PRIMARIA"]].concat(extraerMatriz('primaria'))), "Primaria");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["E.S.O."]].concat(extraerMatriz('eso'))), "ESO");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["BACHILLERATO"]].concat(extraerMatriz('bach'))), "Bachillerato");
+
+            const profesores = [["Nombre", "Apellidos", "DNI/DEI", "Niveles"]];
+            document.querySelectorAll('#lista-profesores .grid').forEach(row => {
+                const inputs = row.querySelectorAll('input');
+                if (inputs.length > 0) profesores.push([inputs[0].value, inputs[1].value, inputs[2].value, inputs[3].value]);
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(profesores), "Profesorado");
+
+            const wsObs = XLSX.utils.aoa_to_sheet([["Observaciones"], [document.getElementById('obs-generales').value]]);
+            XLSX.utils.book_append_sheet(wb, wsObs, "Observaciones");
+
+            return { wb, codigo, nombreCentro };
+        }
+
+        function descargarExcelLocal() {
+            try {
+                const { wb, codigo, nombreCentro } = generarWorkbook();
+                XLSX.writeFile(wb, `Estadillo_${codigo}_${nombreCentro}.xlsx`);
+            } catch (e) {
+                alert("Error al generar el Excel: " + e.message);
+            }
+        }
+
+        // ============================================
+        // FUNCIÓN GUARDAR EN NUBE CORREGIDA
+        // ============================================
+        function guardarEnNube() {
+            const btn = document.getElementById('btn-cloud');
+            const originalText = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Enviando...`;
+            lucide.createIcons();
+
+            try {
+                const { wb, codigo, nombreCentro } = generarWorkbook();
+                const filename = `Estadillo_${codigo}_${nombreCentro}.xlsx`;
+
+                const wbOut = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
+
+                const payload = {
+                    filename: filename,
+                    base64: wbOut
+                };
+
+                // Uso de text/plain para evitar Preflight CORS y recibir respuesta real
+                fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    redirect: 'follow',
+                    headers: {
+                        "Content-Type": "text/plain;charset=utf-8"
+                    },
+                    body: JSON.stringify(payload)
+                })
+                    .then(response => {
+                        // Detectar si Google redirecciona al Login (Error de permisos)
+                        if (response.redirected && response.url.includes('ServiceLogin')) {
+                            throw new Error("Google solicita inicio de sesión. El script NO está configurado como 'Cualquier usuario' (Anyone).");
+                        }
+                        if (!response.ok) {
+                            throw new Error(`Error HTTP: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert(`✅ ¡ÉXITO!\n\nEl archivo se ha enviado correctamente.`);
+                        } else {
+                            alert(`❌ Error del script: ${data.message}`);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error Fetch:', error);
+                        alert(`❌ ERROR DE PERMISOS O RED\n\n${error.message}\n\nSOLUCIÓN: Asegúrese de que la implementación del script tenga acceso configurado para "Cualquier persona" (Anyone).`);
+                    })
+                    .finally(() => {
+                        btn.disabled = false;
+                        btn.innerHTML = originalText;
+                        lucide.createIcons();
+                    });
+
+            } catch (e) {
+                console.error(e);
+                alert("Error crítico interno: " + e.message);
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                lucide.createIcons();
+            }
+        }
+    </script>
+</body>
+
+</html>
